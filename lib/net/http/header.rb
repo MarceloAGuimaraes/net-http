@@ -70,7 +70,7 @@
 #
 # - These methods return field values as string;
 #   the string value for a field is equivalent to
-#   <tt>self[key.downcase.to_s].join(', '))</tt>:
+#   <tt>self[format_key(key)].join(', '))</tt>:
 #
 #   - #[]: Returns the string value for the given key,
 #     or +nil+ if it does not exist.
@@ -182,7 +182,8 @@ module Net::HTTPHeader
   MAX_KEY_LENGTH = 1024
   MAX_FIELD_LENGTH = 65536
 
-  def initialize_http_header(initheader) #:nodoc:
+  def initialize_http_header(initheader, case_sensitive = true) #:nodoc:
+    @case_sensitive = case_sensitive
     @header = {}
     return unless initheader
     initheader.each do |key, value|
@@ -200,9 +201,15 @@ module Net::HTTPHeader
         if value.count("\r\n") > 0
           raise ArgumentError, "header #{key} has field value #{value.inspect}, this cannot include CR/LF"
         end
-        @header[key.downcase.to_s] = [value]
+        @header[format_key(key)] = [value]
       end
     end
+  end
+
+  def format_key(key)
+    return key if @case_sensitive
+
+    key.downcase.to_s
   end
 
   def size   #:nodoc: obsolete
@@ -222,7 +229,7 @@ module Net::HTTPHeader
   # Note that some field values may be retrieved via convenience methods;
   # see {Getters}[rdoc-ref:Net::HTTPHeader@Getters].
   def [](key)
-    a = @header[key.downcase.to_s] or return nil
+    a = @header[format_key(key)] or return nil
     a.join(', ')
   end
 
@@ -239,7 +246,7 @@ module Net::HTTPHeader
   # see {Setters}[rdoc-ref:Net::HTTPHeader@Setters].
   def []=(key, val)
     unless val
-      @header.delete key.downcase.to_s
+      @header.delete format_key(key)
       return val
     end
     set_field(key, val)
@@ -259,7 +266,7 @@ module Net::HTTPHeader
   #   req.get_fields('Foo') # => ["bar", "baz", "baz", "bam"]
   #
   def add_field(key, val)
-    stringified_downcased_key = key.downcase.to_s
+    stringified_downcased_key = format_key(key)
     if @header.key?(stringified_downcased_key)
       append_field_value(@header[stringified_downcased_key], val)
     else
@@ -272,13 +279,13 @@ module Net::HTTPHeader
     when Enumerable
       ary = []
       append_field_value(ary, val)
-      @header[key.downcase.to_s] = ary
+      @header[format_key(key)] = ary
     else
       val = val.to_s # for compatibility use to_s instead of to_str
       if val.b.count("\r\n") > 0
         raise ArgumentError, 'header field value cannot include CR/LF'
       end
-      @header[key.downcase.to_s] = [val]
+      @header[format_key(key)] = [val]
     end
   end
 
@@ -304,7 +311,7 @@ module Net::HTTPHeader
   #   res.get_fields('Nosuch')     # => nil
   #
   def get_fields(key)
-    stringified_downcased_key = key.downcase.to_s
+    stringified_downcased_key = format_key(key)
     return nil unless @header[stringified_downcased_key]
     @header[stringified_downcased_key].dup
   end
@@ -339,7 +346,7 @@ module Net::HTTPHeader
   #   res.fetch('Nosuch')            # Raises KeyError.
   #
   def fetch(key, *args, &block)   #:yield: +key+
-    a = @header.fetch(key.downcase.to_s, *args, &block)
+    a = @header.fetch(format_key(key), *args, &block)
     a.kind_of?(Array) ? a.join(', ') : a
   end
 
@@ -451,7 +458,7 @@ module Net::HTTPHeader
   #   req.delete('Nosuch') # => nil
   #
   def delete(key)
-    @header.delete(key.downcase.to_s)
+    @header.delete(format_key(key))
   end
 
   # Returns +true+ if the field for the case-insensitive +key+ exists, +false+ otherwise:
@@ -461,7 +468,7 @@ module Net::HTTPHeader
   #   req.key?('Nosuch') # => false
   #
   def key?(key)
-    @header.key?(key.downcase.to_s)
+    @header.key?(format_key(key))
   end
 
   # Returns a hash of the key/value pairs:
